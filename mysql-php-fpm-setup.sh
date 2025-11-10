@@ -2,11 +2,11 @@
 # ============================================================
 # PHP + MariaDB setup for Arch Linux (WordPress optimized 2025)
 # Author: Avijit Sarkar
+# Version: 1.1
 # ============================================================
 
 set -euo pipefail
 
-DB_ROOT_PASS="root"
 PHP_INI="/etc/php/php.ini"
 FPM_POOL="/etc/php/php-fpm.d/www.conf"
 
@@ -30,15 +30,31 @@ fi
 echo "▶ Enabling and starting MariaDB..."
 sudo systemctl enable --now mariadb
 
-echo "▶ Securing MariaDB..."
-sudo mysql --user=root <<EOF || true
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_ROOT_PASS}';
-DELETE FROM mysql.user WHERE User='';
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-EOF
-echo "✅ MariaDB root password set to '${DB_ROOT_PASS}'"
+# ------------------------------------------------------------
+# Secure MariaDB — interactive password setup
+# ------------------------------------------------------------
+echo ""
+echo "------------------------------------------------------------"
+echo "🔐 MySQL Secure Installation"
+echo "------------------------------------------------------------"
+echo "This will help you secure your MariaDB installation."
+echo "You will be asked to set a root password and remove test DBs."
+echo ""
+
+# Run official secure installation tool (interactive)
+sudo mysql_secure_installation
+
+# Verify MariaDB root access
+echo ""
+echo "▶ Verifying MariaDB root access..."
+read -rsp "Enter your new MariaDB root password: " DB_ROOT_PASS
+echo ""
+if mysql -u root -p"${DB_ROOT_PASS}" -e "SELECT VERSION();" &>/dev/null; then
+    echo "✅ MariaDB root password verified."
+else
+    echo "❌ Could not verify root access. Please check your password."
+    exit 1
+fi
 
 # ---------------------------
 # PHP Setup
@@ -76,7 +92,7 @@ opcache.revalidate_freq=0\n\
 opcache.save_comments=1\n\
 opcache.jit=0\n' "$PHP_INI"
 
-# --- realpath cache (filesystem speed) ---
+# --- Realpath cache (filesystem performance) ---
 if ! grep -q "realpath_cache_size" "$PHP_INI"; then
   echo "realpath_cache_size = 4096k" | sudo tee -a "$PHP_INI" >/dev/null
   echo "realpath_cache_ttl = 600" | sudo tee -a "$PHP_INI" >/dev/null
@@ -116,10 +132,13 @@ systemctl is-active --quiet php-fpm && echo "✅ PHP-FPM is running." || echo "�
 echo ""
 echo "🎉 PHP + MariaDB setup complete! Optimized for WordPress 🚀"
 echo "------------------------------------------------------------"
-echo "MariaDB root password : ${DB_ROOT_PASS}"
+echo "MariaDB root password : ${DB_ROOT_PASS:-<set during install>}"
 echo "PHP-FPM socket        : /run/php-fpm/php-fpm.sock"
 echo "PHP config file       : /etc/php/php.ini"
 echo "PHP-FPM pool          : /etc/php/php-fpm.d/www.conf"
 echo "MariaDB data dir      : /var/lib/mysql"
 echo "Error log             : /var/log/php/errors.log"
+echo "------------------------------------------------------------"
+echo "💡 Tip: You can verify security settings anytime with:"
+echo "   sudo mysql_secure_installation"
 echo "------------------------------------------------------------"
