@@ -18,7 +18,7 @@ passwd root
 # --- Install essential packages ---
 echo "📦 Installing sudo and vim..."
 pacman -Syu --noconfirm
-pacman -S --noconfirm sudo vim
+pacman -S --noconfirm sudo vim git
 
 # --- Create new user ---
 USERNAME="avijit"
