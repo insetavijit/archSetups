@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# PHP + MariaDB setup for Arch Linux (2025 optimized for WordPress)
+# PHP + MariaDB setup for Arch Linux (WordPress optimized 2025)
 # Author: Avijit Sarkar
 # ============================================================
 
@@ -13,10 +13,9 @@ FPM_POOL="/etc/php/php-fpm.d/www.conf"
 echo "▶ Updating system..."
 sudo pacman -Syu --noconfirm
 
-echo "▶ Installing PHP (with extensions) and MariaDB..."
+echo "▶ Installing PHP (with key extensions) and MariaDB..."
 sudo pacman -S --needed --noconfirm \
-    php php-fpm php-gd php-intl php-curl php-mysqli php-zip php-opcache php-bcmath php-exif \
-    php-mbstring php-xml php-soap php-sodium mariadb
+    php php-fpm php-gd php-intl php-sodium mariadb
 
 # ---------------------------
 # MariaDB Setup
@@ -39,7 +38,6 @@ DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 FLUSH PRIVILEGES;
 EOF
-
 echo "✅ MariaDB root password set to '${DB_ROOT_PASS}'"
 
 # ---------------------------
@@ -47,7 +45,7 @@ echo "✅ MariaDB root password set to '${DB_ROOT_PASS}'"
 # ---------------------------
 echo "▶ Configuring PHP for WordPress..."
 
-# Basic tuning
+# --- Core tuning ---
 sudo sed -i -E 's/^;?cgi\.fix_pathinfo=.*/cgi.fix_pathinfo=0/' "$PHP_INI"
 sudo sed -i -E 's/^;?memory_limit.*/memory_limit = 512M/' "$PHP_INI"
 sudo sed -i -E 's/^;?upload_max_filesize.*/upload_max_filesize = 128M/' "$PHP_INI"
@@ -61,7 +59,7 @@ sudo sed -i -E 's|^;?error_log.*|error_log = /var/log/php/errors.log|' "$PHP_INI
 sudo sed -i -E 's/^;?default_charset.*/default_charset = "UTF-8"/' "$PHP_INI"
 sudo sed -i -E 's/^;?allow_url_fopen.*/allow_url_fopen = On/' "$PHP_INI"
 
-# OPcache tuning (if block exists, overwrite values)
+# --- OPcache tuning ---
 if ! grep -q "opcache.enable" "$PHP_INI"; then
     echo "" | sudo tee -a "$PHP_INI" >/dev/null
     echo "[opcache]" | sudo tee -a "$PHP_INI" >/dev/null
@@ -78,7 +76,7 @@ opcache.revalidate_freq=0\n\
 opcache.save_comments=1\n\
 opcache.jit=0\n' "$PHP_INI"
 
-# realpath cache optimization
+# --- realpath cache (filesystem speed) ---
 if ! grep -q "realpath_cache_size" "$PHP_INI"; then
   echo "realpath_cache_size = 4096k" | sudo tee -a "$PHP_INI" >/dev/null
   echo "realpath_cache_ttl = 600" | sudo tee -a "$PHP_INI" >/dev/null
