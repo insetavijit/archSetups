@@ -2,7 +2,7 @@
 # ============================================================
 # WordPress Auto Setup Script (for Arch + Nginx + WP-CLI)
 # Author: Avijit Sarkar
-# Version: 3.0 (Enhanced with better structure & modern features)
+# Version: 3.0 (Enhanced - No FTP Prompts)
 # ============================================================
 
 set -euo pipefail
@@ -26,7 +26,6 @@ PLUGINS=("elementor" "classic-editor")
 
 # Script metadata
 SCRIPT_VERSION="3.0"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ------------------------------------------------------------
 # Colors & Symbols
@@ -39,7 +38,6 @@ C_BLUE="\033[34m"
 C_CYAN="\033[36m"
 C_GRAY="\033[90m"
 C_BOLD="\033[1m"
-C_MAGENTA="\033[35m"
 
 # Unicode symbols
 S_CHECK="✓"
@@ -58,8 +56,6 @@ ${C_BOLD}${C_CYAN}WordPress Auto Setup Script v${SCRIPT_VERSION}${C_RESET}
 ${C_CYAN}${C_BOLD}USAGE:${C_RESET}
   $0 <site_name> [db_user] [admin_user] [admin_pass] [admin_email] [theme]
   $0 --diagnose <site_name>
-  $0 --backup <site_name> [backup_name]
-  $0 --restore <site_name> <backup_name>
   $0 --remove <site_name>
 
 ${C_CYAN}${C_BOLD}EXAMPLES:${C_RESET}
@@ -72,40 +68,26 @@ ${C_CYAN}${C_BOLD}EXAMPLES:${C_RESET}
   ${C_GRAY}# Diagnose existing site${C_RESET}
   $0 --diagnose mysite
 
-  ${C_GRAY}# Backup a site${C_RESET}
-  $0 --backup mysite backup-20241112
-
   ${C_GRAY}# Remove a site completely${C_RESET}
   $0 --remove mysite
 
 ${C_CYAN}${C_BOLD}ARGUMENTS:${C_RESET}
-  ${C_GREEN}site_name${C_RESET}    Required. Name of the WordPress site (alphanumeric, hyphens)
+  ${C_GREEN}site_name${C_RESET}    Required. Name of the WordPress site
   ${C_GREEN}db_user${C_RESET}      Optional. MySQL user (default: root)
   ${C_GREEN}admin_user${C_RESET}   Optional. WP admin username (default: admin)
   ${C_GREEN}admin_pass${C_RESET}   Optional. WP admin password (default: 123)
   ${C_GREEN}admin_email${C_RESET}  Optional. WP admin email (default: admin@example.com)
   ${C_GREEN}theme${C_RESET}        Optional. Theme slug to install (default: astra)
 
-${C_CYAN}${C_BOLD}OPTIONS:${C_RESET}
-  ${C_GREEN}--diagnose${C_RESET}   Run comprehensive diagnostics on existing site
-  ${C_GREEN}--backup${C_RESET}     Create complete backup (files + database)
-  ${C_GREEN}--restore${C_RESET}    Restore site from backup
-  ${C_GREEN}--remove${C_RESET}     Remove site completely (with confirmation)
-  ${C_GREEN}-h, --help${C_RESET}   Show this help message
-  ${C_GREEN}--version${C_RESET}    Show script version
-
 ${C_CYAN}${C_BOLD}FEATURES:${C_RESET}
-  ${S_ARROW} Automatic dependency checking & installation
-  ${S_ARROW} Secure MySQL setup with validation
-  ${S_ARROW} Smart Nginx configuration with PHP-FPM
-  ${S_ARROW} Complete backup & restore functionality
-  ${S_ARROW} Comprehensive error handling & rollback
-  ${S_ARROW} Detailed logging with timestamps
-  ${S_ARROW} Site health diagnostics
-  ${S_ARROW} Clean site removal
+  ${S_ARROW} No FTP prompts - direct file system access
+  ${S_ARROW} Automatic dependency installation
+  ${S_ARROW} Secure MySQL setup
+  ${S_ARROW} Smart Nginx configuration
+  ${S_ARROW} Complete error handling & rollback
+  ${S_ARROW} Detailed logging
 
-${C_GRAY}Log directory: $WWW_DIR/_logs
-Backup directory: $WWW_DIR/_backups${C_RESET}
+${C_GRAY}Log directory: $WWW_DIR/_logs${C_RESET}
 EOF
     exit 0
 }
@@ -128,16 +110,6 @@ diagnose_site() {
         local dir_size=$(du -sh "$site_dir" 2>/dev/null | cut -f1)
         echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Size: $dir_size"
         echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Permissions: $(ls -ld "$site_dir" | awk '{print $1, $3":"$4}')"
-
-        # Check key WordPress files
-        local key_files=("wp-config.php" "wp-load.php" "wp-settings.php" "index.php")
-        for file in "${key_files[@]}"; do
-            if [[ -f "$site_dir/$file" ]]; then
-                echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} $file"
-            else
-                echo -e "  ${C_RED}${S_CROSS}${C_RESET} $file ${C_GRAY}(missing)${C_RESET}"
-            fi
-        done
     else
         echo -e "  ${C_RED}${S_CROSS}${C_RESET} Site directory not found"
         return 1
@@ -148,8 +120,7 @@ diagnose_site() {
     if [[ -f "$site_dir/wp-config.php" ]]; then
         echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} wp-config.php exists"
         echo -e "\n  ${C_GRAY}Database Settings:${C_RESET}"
-        grep -E "DB_NAME|DB_USER|DB_HOST|table_prefix" "$site_dir/wp-config.php" | \
-            sed 's/^/    /' | sed "s/define/  ${C_CYAN}define${C_RESET}/"
+        grep -E "DB_NAME|DB_USER|DB_HOST|FS_METHOD" "$site_dir/wp-config.php" | sed 's/^/    /'
     else
         echo -e "  ${C_RED}${S_CROSS}${C_RESET} wp-config.php not found"
     fi
@@ -165,17 +136,6 @@ diagnose_site() {
             echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} WordPress is installed"
             local wp_version=$(wp core version 2>/dev/null)
             echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Version: $wp_version"
-
-            # Get site info
-            local site_url=$(wp option get siteurl 2>/dev/null)
-            local site_title=$(wp option get blogname 2>/dev/null)
-            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} URL: $site_url"
-            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Title: $site_title"
-
-            # Count posts
-            local post_count=$(wp post list --post_type=post --format=count 2>/dev/null || echo "0")
-            local page_count=$(wp post list --post_type=page --format=count 2>/dev/null || echo "0")
-            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Posts: $post_count | Pages: $page_count"
         else
             echo -e "  ${C_YELLOW}${S_WARN}${C_RESET} WordPress not installed in database"
         fi
@@ -183,32 +143,12 @@ diagnose_site() {
         echo -e "  ${C_RED}${S_CROSS}${C_RESET} Database connection failed"
     fi
 
-    # Theme & Plugins
-    echo -e "\n${C_BLUE}${C_BOLD}[4] Theme & Plugins${C_RESET}"
-    local active_theme=$(wp theme list --status=active --field=name 2>/dev/null || echo "Unknown")
-    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Active Theme: $active_theme"
-
-    local plugin_count=$(wp plugin list --status=active --format=count 2>/dev/null || echo "0")
-    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Active Plugins: $plugin_count"
-
-    if [[ $plugin_count -gt 0 ]]; then
-        wp plugin list --status=active --fields=name,version --format=table 2>/dev/null | \
-            tail -n +2 | sed 's/^/    /'
-    fi
-
     # Nginx Check
-    echo -e "\n${C_BLUE}${C_BOLD}[5] Nginx Configuration${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}[4] Nginx Configuration${C_RESET}"
     if [[ -f "/etc/nginx/sites-available/$site.conf" ]]; then
         echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Nginx config exists"
         if [[ -L "/etc/nginx/sites-enabled/$site.conf" ]]; then
             echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Config is enabled"
-
-            # Test nginx config
-            if sudo nginx -t &>/dev/null; then
-                echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Nginx config valid"
-            else
-                echo -e "  ${C_RED}${S_CROSS}${C_RESET} Nginx config has errors"
-            fi
         else
             echo -e "  ${C_YELLOW}${S_WARN}${C_RESET} Config not enabled"
         fi
@@ -216,103 +156,7 @@ diagnose_site() {
         echo -e "  ${C_RED}${S_CROSS}${C_RESET} Nginx config not found"
     fi
 
-    # Health Check
-    echo -e "\n${C_BLUE}${C_BOLD}[6] Site Health${C_RESET}"
-    if command -v curl &>/dev/null; then
-        local http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost/$site" 2>/dev/null || echo "000")
-        if [[ "$http_code" == "200" ]]; then
-            echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Site is accessible (HTTP $http_code)"
-        else
-            echo -e "  ${C_RED}${S_CROSS}${C_RESET} Site returned HTTP $http_code"
-        fi
-    fi
-
-    # Latest log
-    echo -e "\n${C_BLUE}${C_BOLD}[7] Recent Logs${C_RESET}"
-    local latest_log=$(ls -t "$WWW_DIR/_logs/$site"*.log 2>/dev/null | head -1)
-    if [[ -n "$latest_log" ]]; then
-        echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Latest: ${C_GRAY}$(basename "$latest_log")${C_RESET}"
-        echo -e "\n  ${C_GRAY}Last 10 lines:${C_RESET}"
-        tail -10 "$latest_log" | sed 's/^/    /'
-    else
-        echo -e "  ${C_GRAY}No log files found${C_RESET}"
-    fi
-
     echo -e "\n${C_GREEN}${C_BOLD}Diagnosis complete!${C_RESET}\n"
-}
-
-# ------------------------------------------------------------
-# Backup & Restore
-# ------------------------------------------------------------
-backup_site() {
-    local site="$1"
-    local backup_name="${2:-backup-$(date +%Y%m%d-%H%M%S)}"
-    local site_dir="$WWW_DIR/$site"
-    local backup_dir="$WWW_DIR/_backups/$site"
-    local backup_path="$backup_dir/$backup_name"
-
-    echo -e "${C_CYAN}${C_BOLD}Creating backup for: $site${C_RESET}\n"
-
-    if [[ ! -d "$site_dir" ]]; then
-        error "Site directory not found: $site_dir"
-        return 1
-    fi
-
-    mkdir -p "$backup_path"
-
-    # Backup files
-    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Backing up files..."
-    tar -czf "$backup_path/files.tar.gz" -C "$WWW_DIR" "$site" 2>/dev/null
-    success "Files backed up"
-
-    # Backup database
-    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Backing up database..."
-    cd "$site_dir"
-    wp db export "$backup_path/database.sql" --quiet 2>/dev/null
-    success "Database backed up"
-
-    # Save metadata
-    cat > "$backup_path/metadata.txt" << EOF
-Site: $site
-Backup Date: $(date '+%Y-%m-%d %H:%M:%S')
-WordPress Version: $(wp core version 2>/dev/null || echo "Unknown")
-Theme: $(wp theme list --status=active --field=name 2>/dev/null || echo "Unknown")
-Site URL: $(wp option get siteurl 2>/dev/null || echo "Unknown")
-EOF
-
-    local backup_size=$(du -sh "$backup_path" | cut -f1)
-    success "Backup created: $backup_path (Size: $backup_size)"
-}
-
-restore_site() {
-    local site="$1"
-    local backup_name="$2"
-    local backup_path="$WWW_DIR/_backups/$site/$backup_name"
-
-    echo -e "${C_CYAN}${C_BOLD}Restoring site: $site${C_RESET}\n"
-
-    if [[ ! -d "$backup_path" ]]; then
-        error "Backup not found: $backup_path"
-        return 1
-    fi
-
-    if ! confirm "This will overwrite current site. Continue?" "n"; then
-        warn "Restore cancelled"
-        return 0
-    fi
-
-    # Restore files
-    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Restoring files..."
-    tar -xzf "$backup_path/files.tar.gz" -C "$WWW_DIR" 2>/dev/null
-    success "Files restored"
-
-    # Restore database
-    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Restoring database..."
-    cd "$WWW_DIR/$site"
-    wp db import "$backup_path/database.sql" --quiet 2>/dev/null
-    success "Database restored"
-
-    success "Site restored successfully!"
 }
 
 # ------------------------------------------------------------
@@ -327,16 +171,11 @@ remove_site() {
     echo -e "This will permanently delete:"
     echo -e "  ${S_ARROW} Directory: $site_dir"
     echo -e "  ${S_ARROW} Database: $db_name"
-    echo -e "  ${S_ARROW} Nginx config: /etc/nginx/sites-available/$site.conf\n"
+    echo -e "  ${S_ARROW} Nginx config\n"
 
     if ! confirm "Are you absolutely sure?" "n"; then
         warn "Removal cancelled"
         return 0
-    fi
-
-    # Create backup first
-    if confirm "Create backup before removal?" "y"; then
-        backup_site "$site" "pre-removal-$(date +%Y%m%d-%H%M%S)"
     fi
 
     # Remove directory
@@ -368,8 +207,6 @@ remove_site() {
 [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && show_usage
 [[ "${1:-}" == "--version" ]] && { echo "WordPress Auto Setup Script v${SCRIPT_VERSION}"; exit 0; }
 [[ "${1:-}" == "--diagnose" ]] && { diagnose_site "${2:-wordpress}"; exit 0; }
-[[ "${1:-}" == "--backup" ]] && { backup_site "${2:-}" "${3:-}"; exit 0; }
-[[ "${1:-}" == "--restore" ]] && { restore_site "${2:-}" "${3:-}"; exit 0; }
 [[ "${1:-}" == "--remove" ]] && { remove_site "${2:-}"; exit 0; }
 
 # Validate site name
@@ -379,7 +216,7 @@ if [[ -z "$SITE_NAME" ]]; then
 fi
 
 if [[ ! "$SITE_NAME" =~ ^[a-zA-Z0-9-]+$ ]]; then
-    error "Invalid site name. Use only alphanumeric characters and hyphens."
+    echo -e "${C_RED}Invalid site name. Use only alphanumeric characters and hyphens.${C_RESET}"
     exit 1
 fi
 
@@ -483,10 +320,6 @@ prepare_www_dir() {
         success "WWW directory exists: $WWW_DIR"
     fi
 
-    # Create backup directory
-    mkdir -p "$WWW_DIR/_backups"
-    success "Backup directory ready"
-
     if [[ -d "$SITE_DIR" ]]; then
         if confirm "Site directory already exists. Remove and recreate?" "n"; then
             rm -rf "$SITE_DIR"
@@ -505,7 +338,7 @@ prepare_www_dir() {
 check_requirements() {
     echo -e "\n${C_BLUE}${C_BOLD}▶ Checking System Requirements${C_RESET}"
 
-    local packages=("php" "php-fpm" "mariadb" "nginx" "curl" "wget" "tar" "gzip")
+    local packages=("php" "php-fpm" "mariadb" "nginx" "curl" "wget")
     local missing=()
 
     for pkg in "${packages[@]}"; do
@@ -579,12 +412,6 @@ check_wp_cli() {
         local version=$(wp --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
         success "WP-CLI ready (version: $version)"
     fi
-
-    # Verify WP-CLI works
-    if ! wp --info &>/dev/null; then
-        error "WP-CLI is not working correctly"
-        exit 1
-    fi
 }
 
 check_services() {
@@ -603,7 +430,6 @@ check_services() {
             success "$service running"
         else
             error "$service failed to start"
-            sudo systemctl status "$service" --no-pager
             exit 1
         fi
     done
@@ -676,4 +502,266 @@ ensure_database() {
         warn "Database '$DB_NAME' already exists"
 
         if confirm "Drop and recreate database?" "n"; then
-            run "mysql -u $DB_USER -p$DB_PASS -e 'DROP DATABASE $DB_NAME;'" \dumy
+            run "mysql -u $DB_USER -p$DB_PASS -e 'DROP DATABASE $DB_NAME;'" \
+                "Drop existing database"
+            run "mysql -u $DB_USER -p$DB_PASS -e 'CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'" \
+                "Create database $DB_NAME"
+        else
+            warn "Using existing database (may cause conflicts)"
+        fi
+    else
+        run "mysql -u $DB_USER -p$DB_PASS -e 'CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'" \
+            "Create database $DB_NAME"
+    fi
+}
+
+# ------------------------------------------------------------
+# Nginx Configuration
+# ------------------------------------------------------------
+setup_nginx() {
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Configuring Nginx${C_RESET}"
+
+    local nginx_conf="/etc/nginx/sites-available/$SITE_NAME.conf"
+    local nginx_enabled="/etc/nginx/sites-enabled/$SITE_NAME.conf"
+
+    # Create directories if they don't exist
+    sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+    # Check if sites-enabled is included in main nginx.conf
+    if ! grep -q "sites-enabled" /etc/nginx/nginx.conf; then
+        warn "Adding sites-enabled to nginx.conf"
+        sudo sed -i '/http {/a \    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
+    fi
+
+    sudo tee "$nginx_conf" > /dev/null <<EOF
+server {
+    listen 80;
+    server_name localhost;
+    root $SITE_DIR;
+    index index.php index.html;
+
+    location /$SITE_NAME {
+        alias $SITE_DIR;
+        try_files \$uri \$uri/ /$SITE_NAME/index.php?\$args;
+
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME \$request_filename;
+            fastcgi_index index.php;
+        }
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+EOF
+
+    sudo ln -sf "$nginx_conf" "$nginx_enabled"
+
+    if sudo nginx -t &>/dev/null; then
+        sudo systemctl reload nginx
+        success "Nginx configured and reloaded"
+    else
+        error "Nginx configuration test failed"
+        return 1
+    fi
+}
+
+# ------------------------------------------------------------
+# WordPress Installation
+# ------------------------------------------------------------
+install_wordpress() {
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Installing WordPress${C_RESET}"
+
+    cd "$SITE_DIR"
+
+    run "wp core download --path=$SITE_DIR --quiet" \
+        "Download WordPress core" || return 1
+
+    run "wp config create --dbname=$DB_NAME --dbuser=$DB_USER --dbpass=$DB_PASS --skip-check --force --quiet" \
+        "Create wp-config.php" || return 1
+
+    # Disable FTP prompts by setting direct file access
+    log "Configuring direct file system access (no FTP prompts)..."
+    wp config set FS_METHOD 'direct' --quiet
+    wp config set FS_CHMOD_DIR 0755 --raw --quiet
+    wp config set FS_CHMOD_FILE 0644 --raw --quiet
+    success "Disabled FTP prompts (set FS_METHOD to 'direct')"
+
+    # Test database connection
+    log "Testing database connection..."
+    if ! wp db check --quiet 2>/dev/null; then
+        error "Database connection failed"
+        wp db check 2>&1 | tee -a "$LOG_FILE"
+        return 1
+    fi
+    success "Database connection verified"
+
+    # Check if WordPress is already installed
+    if wp core is-installed 2>/dev/null; then
+        warn "WordPress is already installed in the database"
+        if confirm "Reinstall WordPress (will erase existing data)?" "n"; then
+            run "wp db reset --yes --quiet" "Reset database"
+        else
+            error "Cannot proceed with existing installation"
+            return 1
+        fi
+    fi
+
+    # Install WordPress
+    log "Installing WordPress..."
+    if ! wp core install \
+        --url="$SITE_URL" \
+        --title="$SITE_TITLE" \
+        --admin_user="$ADMIN_USER" \
+        --admin_password="$ADMIN_PASS" \
+        --admin_email="$ADMIN_EMAIL" \
+        --skip-email 2>&1 | tee -a "$LOG_FILE"; then
+        error "WordPress installation failed"
+        return 1
+    fi
+    success "WordPress installed"
+
+    run "wp rewrite structure '/%postname%/' --hard --quiet" \
+        "Set permalink structure" || return 1
+}
+
+setup_theme() {
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Setting up Theme${C_RESET}"
+
+    if [[ "$THEME" != "default" && -n "$THEME" ]]; then
+        if run "wp theme install $THEME --activate --quiet" "Install and activate theme ($THEME)"; then
+            # Remove unused default themes
+            local inactive_themes
+            inactive_themes=$(wp theme list --status=inactive --field=name 2>/dev/null || echo "")
+            if [[ -n "$inactive_themes" ]]; then
+                run "wp theme delete $inactive_themes --quiet" "Remove unused themes" || warn "Could not remove some themes"
+            fi
+        else
+            warn "Theme installation failed. Using default theme."
+        fi
+    else
+        log "Using default theme"
+    fi
+}
+
+setup_plugins() {
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Setting up Plugins${C_RESET}"
+
+    if (( ${#PLUGINS[@]} > 0 )); then
+        for plugin in "${PLUGINS[@]}"; do
+            run "wp plugin install $plugin --activate --quiet" \
+                "Install plugin ($plugin)" || warn "Plugin $plugin installation failed"
+        done
+
+        # Remove default plugins
+        run "wp plugin delete hello akismet --quiet" \
+            "Remove default plugins" || warn "Could not remove default plugins"
+    else
+        log "No additional plugins to install"
+    fi
+}
+
+finalize_setup() {
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Finalizing Setup${C_RESET}"
+
+    local plugin_list="${PLUGINS[*]:-none}"
+    run "wp option update blogdescription 'Built with WordPress, $THEME & $plugin_list' --quiet" \
+        "Update site tagline"
+
+    run "wp option update timezone_string 'Asia/Kolkata' --quiet" \
+        "Set timezone"
+
+    # Set proper permissions to avoid FTP prompts
+    log "Setting file permissions for direct access..."
+
+    # Set ownership
+    sudo chown -R "$USER:http" "$SITE_DIR"
+
+    # Set directory permissions
+    sudo chmod -R 755 "$SITE_DIR"
+
+    # Set specific write permissions for wp-content
+    sudo chmod -R 775 "$SITE_DIR/wp-content"
+
+    # Ensure subdirectories are writable
+    for dir in plugins themes uploads upgrade; do
+        if [[ -d "$SITE_DIR/wp-content/$dir" ]]; then
+            sudo chmod -R 775 "$SITE_DIR/wp-content/$dir"
+        fi
+    done
+
+    success "Set proper file permissions (no FTP prompts)"
+
+    # Verify FS_METHOD is set
+    local fs_method=$(wp config get FS_METHOD --quiet 2>/dev/null || echo "not set")
+    if [[ "$fs_method" == "direct" ]]; then
+        success "Direct file system access confirmed"
+    else
+        warn "FS_METHOD not properly set, adding manually..."
+        wp config set FS_METHOD 'direct' --quiet
+    fi
+}
+
+# ------------------------------------------------------------
+# Main Execution
+# ------------------------------------------------------------
+main() {
+    clear
+    echo -e "${C_BOLD}${C_CYAN}"
+    echo "╔══════════════════════════════════════════════════════╗"
+    echo "║      WordPress Auto Setup Script v${SCRIPT_VERSION}            ║"
+    echo "║            No FTP Prompts Edition                    ║"
+    echo "╚══════════════════════════════════════════════════════╝"
+    echo -e "${C_RESET}"
+    echo -e "${C_BLUE}Site:${C_RESET}  ${C_BOLD}$SITE_NAME${C_RESET}"
+    echo -e "${C_BLUE}Path:${C_RESET}  $SITE_DIR"
+    echo -e "${C_BLUE}URL:${C_RESET}   $SITE_URL\n"
+
+    log "=== Starting WordPress setup for $SITE_NAME ==="
+
+    check_requirements
+    check_wp_cli
+    check_services
+    prepare_www_dir
+
+    setup_mysql_password
+    prompt_mysql_password
+    ensure_database
+
+    install_wordpress
+    setup_nginx
+    setup_theme
+    setup_plugins
+    finalize_setup
+
+    # Success summary
+    echo -e "\n${C_GREEN}${C_BOLD}╔══════════════════════════════════════════════════════╗"
+    echo -e "║         Setup Completed Successfully!                ║"
+    echo -e "╚══════════════════════════════════════════════════════╝${C_RESET}\n"
+
+    echo -e "${C_CYAN}${C_BOLD}Site Details:${C_RESET}"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} URL:       $SITE_URL"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Admin:     $SITE_URL/wp-admin"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Username:  $ADMIN_USER"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Password:  $ADMIN_PASS"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Email:     $ADMIN_EMAIL"
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Theme:     ${THEME:-default}"
+    [[ ${#PLUGINS[@]} -gt 0 ]] && echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Plugins:   ${PLUGINS[*]}"
+    echo -e "  ${C_GRAY}${S_ARROW}${C_RESET} Log:       $LOG_FILE"
+
+    echo -e "\n${C_YELLOW}${C_BOLD}Next Steps:${C_RESET}"
+    echo -e "  ${C_CYAN}1.${C_RESET} Visit $SITE_URL to see your site"
+    echo -e "  ${C_CYAN}2.${C_RESET} Login at $SITE_URL/wp-admin"
+    echo -e "  ${C_CYAN}3.${C_RESET} Install plugins/themes directly (no FTP prompts!)"
+    echo -e "  ${C_CYAN}4.${C_RESET} Start building!\n"
+
+    echo -e "${C_GREEN}${C_BOLD}✓ No FTP credentials required - direct file access enabled!${C_RESET}\n"
+
+    log "Setup completed successfully"
+}
+
+# Run main function
+main
