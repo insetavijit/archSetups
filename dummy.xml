@@ -1,0 +1,490 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+	xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:wp="http://wordpress.org/export/1.2/">
+<channel>
+	<title>WordPress Development Blog</title>
+	<link>http://localhost</link>
+	<description>Learn WordPress Development</description>
+	<pubDate>Wed, 12 Nov 2025 10:00:00 +0000</pubDate>
+	<language>en-US</language>
+	<wp:wxr_version>1.2</wp:wxr_version>
+	<wp:base_site_url>http://localhost</wp:base_site_url>
+	<wp:base_blog_url>http://localhost</wp:base_blog_url>
+
+	<item>
+		<title>Getting Started with WordPress Theme Development</title>
+		<link>http://localhost/getting-started-with-wordpress-theme-development/</link>
+		<pubDate>Mon, 01 Nov 2025 09:00:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">http://localhost/?p=1</guid>
+		<description></description>
+		<content:encoded><![CDATA[<h2>Introduction to WordPress Theme Development</h2>
+
+<p>WordPress theme development is the foundation of creating custom designs for WordPress websites. Whether you're building a theme from scratch or customizing an existing one, understanding the core concepts is essential.</p>
+
+<h3>Essential Files for a WordPress Theme</h3>
+
+<p>Every WordPress theme requires at least two files:</p>
+
+<ul>
+<li><strong>style.css</strong> - Contains theme metadata and styles</li>
+<li><strong>index.php</strong> - The main template file</li>
+</ul>
+
+<h3>Basic Theme Structure</h3>
+
+<p>A typical WordPress theme includes:</p>
+
+<pre><code>
+/your-theme/
+  ├── style.css
+  ├── index.php
+  ├── header.php
+  ├── footer.php
+  ├── sidebar.php
+  ├── functions.php
+  ├── single.php
+  ├── page.php
+  └── /js/
+  └── /css/
+  └── /images/
+</code></pre>
+
+<h3>Creating Your First Theme</h3>
+
+<p>Start by creating a new folder in <code>wp-content/themes/</code> and add a style.css file with the theme header:</p>
+
+<pre><code>
+/*
+Theme Name: My Custom Theme
+Theme URI: https://example.com
+Author: Your Name
+Author URI: https://example.com
+Description: A custom WordPress theme
+Version: 1.0
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+*/
+</code></pre>
+
+<p>Next steps include creating your index.php file and adding WordPress template tags to display dynamic content. Happy coding!</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[Learn the fundamentals of WordPress theme development, including essential files, directory structure, and how to create your first custom theme.]]></excerpt:encoded>
+		<wp:post_id>1</wp:post_id>
+		<wp:post_date><![CDATA[2025-11-01 09:00:00]]></wp:post_date>
+		<wp:post_date_gmt><![CDATA[2025-11-01 09:00:00]]></wp:post_date_gmt>
+		<wp:post_modified><![CDATA[2025-11-01 09:00:00]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-01 09:00:00]]></wp:post_modified_gmt>
+		<wp:comment_status><![CDATA[open]]></wp:comment_status>
+		<wp:ping_status><![CDATA[open]]></wp:ping_status>
+		<wp:post_name><![CDATA[getting-started-with-wordpress-theme-development]]></wp:post_name>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_parent>0</wp:post_parent>
+		<wp:menu_order>0</wp:menu_order>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<wp:post_password><![CDATA[]]></wp:post_password>
+		<wp:is_sticky>0</wp:is_sticky>
+		<category domain="category" nicename="tutorials"><![CDATA[Tutorials]]></category>
+		<category domain="post_tag" nicename="theme-development"><![CDATA[theme development]]></category>
+		<category domain="post_tag" nicename="wordpress"><![CDATA[wordpress]]></category>
+	</item>
+
+	<item>
+		<title>Understanding WordPress Hooks: Actions and Filters</title>
+		<link>http://localhost/understanding-wordpress-hooks-actions-and-filters/</link>
+		<pubDate>Wed, 03 Nov 2025 10:30:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">http://localhost/?p=2</guid>
+		<description></description>
+		<content:encoded><![CDATA[<h2>Mastering WordPress Hooks</h2>
+
+<p>Hooks are one of the most powerful features in WordPress development. They allow you to modify or add functionality without editing core files.</p>
+
+<h3>What Are Hooks?</h3>
+
+<p>WordPress hooks come in two types:</p>
+
+<ul>
+<li><strong>Actions</strong> - Allow you to add or execute code at specific points</li>
+<li><strong>Filters</strong> - Allow you to modify data before it's displayed or saved</li>
+</ul>
+
+<h3>Using Actions</h3>
+
+<p>Actions let you inject custom code at specific execution points. Here's an example:</p>
+
+<pre><code>
+function custom_footer_message() {
+    echo '&lt;p&gt;Custom footer message&lt;/p&gt;';
+}
+add_action('wp_footer', 'custom_footer_message');
+</code></pre>
+
+<h3>Using Filters</h3>
+
+<p>Filters modify data before it's used. Example:</p>
+
+<pre><code>
+function modify_excerpt_length($length) {
+    return 20;
+}
+add_filter('excerpt_length', 'modify_excerpt_length');
+</code></pre>
+
+<h3>Common WordPress Hooks</h3>
+
+<p>Some frequently used hooks include:</p>
+
+<ul>
+<li><code>wp_enqueue_scripts</code> - For adding CSS and JavaScript</li>
+<li><code>init</code> - Runs after WordPress finishes loading</li>
+<li><code>the_content</code> - Filters post content</li>
+<li><code>wp_head</code> - Adds code to the head section</li>
+</ul>
+
+<h3>Best Practices</h3>
+
+<p>Always use hooks instead of modifying core files. This ensures your changes survive WordPress updates and maintains compatibility with plugins and themes.</p>
+
+<p>Understanding hooks is crucial for any WordPress developer. They provide the flexibility to extend WordPress functionality in a safe and maintainable way.</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[Discover how WordPress hooks work and learn to use actions and filters to extend functionality without modifying core files.]]></excerpt:encoded>
+		<wp:post_id>2</wp:post_id>
+		<wp:post_date><![CDATA[2025-11-03 10:30:00]]></wp:post_date>
+		<wp:post_date_gmt><![CDATA[2025-11-03 10:30:00]]></wp:post_date_gmt>
+		<wp:post_modified><![CDATA[2025-11-03 10:30:00]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-03 10:30:00]]></wp:post_modified_gmt>
+		<wp:comment_status><![CDATA[open]]></wp:comment_status>
+		<wp:ping_status><![CDATA[open]]></wp:ping_status>
+		<wp:post_name><![CDATA[understanding-wordpress-hooks-actions-and-filters]]></wp:post_name>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_parent>0</wp:post_parent>
+		<wp:menu_order>0</wp:menu_order>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<wp:post_password><![CDATA[]]></wp:post_password>
+		<wp:is_sticky>0</wp:is_sticky>
+		<category domain="category" nicename="tutorials"><![CDATA[Tutorials]]></category>
+		<category domain="post_tag" nicename="hooks"><![CDATA[hooks]]></category>
+		<category domain="post_tag" nicename="actions"><![CDATA[actions]]></category>
+		<category domain="post_tag" nicename="filters"><![CDATA[filters]]></category>
+	</item>
+
+	<item>
+		<title>Building Custom WordPress Plugins: A Beginner's Guide</title>
+		<link>http://localhost/building-custom-wordpress-plugins-beginners-guide/</link>
+		<pubDate>Fri, 05 Nov 2025 14:00:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">http://localhost/?p=3</guid>
+		<description></description>
+		<content:encoded><![CDATA[<h2>Creating Your First WordPress Plugin</h2>
+
+<p>WordPress plugins allow you to add custom functionality to your website without modifying the core code or theme files. Learning to build plugins is an essential skill for WordPress developers.</p>
+
+<h3>What is a WordPress Plugin?</h3>
+
+<p>A plugin is a piece of software that adds specific features to your WordPress website. Plugins can be as simple as a few lines of code or as complex as full-fledged applications.</p>
+
+<h3>Plugin File Structure</h3>
+
+<p>At minimum, a plugin needs:</p>
+
+<pre><code>
+/my-plugin/
+  └── my-plugin.php
+</code></pre>
+
+<h3>Creating the Plugin Header</h3>
+
+<p>Every plugin starts with a header comment block:</p>
+
+<pre><code>
+&lt;?php
+/*
+Plugin Name: My First Plugin
+Plugin URI: https://example.com/my-plugin
+Description: A simple custom plugin
+Version: 1.0
+Author: Your Name
+Author URI: https://example.com
+License: GPL2
+*/
+</code></pre>
+
+<h3>Adding Functionality</h3>
+
+<p>Here's a simple example that adds a custom widget:</p>
+
+<pre><code>
+function my_custom_widget() {
+    echo '&lt;div class="custom-widget"&gt;Hello from my plugin!&lt;/div&gt;';
+}
+add_action('wp_footer', 'my_custom_widget');
+</code></pre>
+
+<h3>Best Practices for Plugin Development</h3>
+
+<ul>
+<li>Use unique function and variable names to avoid conflicts</li>
+<li>Follow WordPress coding standards</li>
+<li>Sanitize and validate all user input</li>
+<li>Use proper WordPress APIs instead of direct database queries</li>
+<li>Add proper documentation and comments</li>
+</ul>
+
+<h3>Testing Your Plugin</h3>
+
+<p>Always test your plugin thoroughly:</p>
+
+<ul>
+<li>Enable WP_DEBUG in wp-config.php</li>
+<li>Test with different themes</li>
+<li>Check for conflicts with popular plugins</li>
+<li>Test on different PHP versions</li>
+</ul>
+
+<p>Building plugins is one of the most rewarding aspects of WordPress development. Start small and gradually add more complex features as you learn!</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[Learn how to create your first WordPress plugin from scratch, including file structure, best practices, and testing tips.]]></excerpt:encoded>
+		<wp:post_id>3</wp:post_id>
+		<wp:post_date><![CDATA[2025-11-05 14:00:00]]></wp:post_date>
+		<wp:post_date_gmt><![CDATA[2025-11-05 14:00:00]]></wp:post_date_gmt>
+		<wp:post_modified><![CDATA[2025-11-05 14:00:00]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-05 14:00:00]]></wp:post_modified_gmt>
+		<wp:comment_status><![CDATA[open]]></wp:comment_status>
+		<wp:ping_status><![CDATA[open]]></wp:ping_status>
+		<wp:post_name><![CDATA[building-custom-wordpress-plugins-beginners-guide]]></wp:post_name>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_parent>0</wp:post_parent>
+		<wp:menu_order>0</wp:menu_order>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<wp:post_password><![CDATA[]]></wp:post_password>
+		<wp:is_sticky>0</wp:is_sticky>
+		<category domain="category" nicename="tutorials"><![CDATA[Tutorials]]></category>
+		<category domain="post_tag" nicename="plugin-development"><![CDATA[plugin development]]></category>
+		<category domain="post_tag" nicename="wordpress"><![CDATA[wordpress]]></category>
+	</item>
+
+	<item>
+		<title>WordPress REST API: Building Modern Applications</title>
+		<link>http://localhost/wordpress-rest-api-building-modern-applications/</link>
+		<pubDate>Sun, 07 Nov 2025 11:15:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">http://localhost/?p=4</guid>
+		<description></description>
+		<content:encoded><![CDATA[<h2>Leveraging the WordPress REST API</h2>
+
+<p>The WordPress REST API opens up incredible possibilities for building modern, decoupled applications. It allows you to interact with your WordPress site using JSON data over HTTP.</p>
+
+<h3>What is the REST API?</h3>
+
+<p>The REST API provides a standardized way to access WordPress data from external applications. You can retrieve, create, update, and delete content using standard HTTP methods.</p>
+
+<h3>Accessing the API</h3>
+
+<p>The API is available at:</p>
+
+<pre><code>
+https://yoursite.com/wp-json/wp/v2/
+</code></pre>
+
+<h3>Common Endpoints</h3>
+
+<ul>
+<li><code>/wp/v2/posts</code> - Get all posts</li>
+<li><code>/wp/v2/pages</code> - Get all pages</li>
+<li><code>/wp/v2/users</code> - Get all users</li>
+<li><code>/wp/v2/categories</code> - Get all categories</li>
+</ul>
+
+<h3>Making API Requests</h3>
+
+<p>Using JavaScript Fetch API:</p>
+
+<pre><code>
+fetch('https://yoursite.com/wp-json/wp/v2/posts')
+  .then(response =&gt; response.json())
+  .then(data =&gt; console.log(data));
+</code></pre>
+
+<h3>Creating Custom Endpoints</h3>
+
+<p>You can register custom REST API endpoints:</p>
+
+<pre><code>
+add_action('rest_api_init', function () {
+  register_rest_route('myplugin/v1', '/data', array(
+    'methods' =&gt; 'GET',
+    'callback' =&gt; 'my_custom_endpoint',
+  ));
+});
+
+function my_custom_endpoint() {
+  return array('message' =&gt; 'Hello from custom endpoint!');
+}
+</code></pre>
+
+<h3>Authentication</h3>
+
+<p>For protected resources, use:</p>
+
+<ul>
+<li>Application Passwords (built-in)</li>
+<li>OAuth 1.0a</li>
+<li>JWT tokens</li>
+</ul>
+
+<h3>Use Cases</h3>
+
+<p>The REST API enables:</p>
+
+<ul>
+<li>Headless WordPress applications</li>
+<li>Mobile app integration</li>
+<li>Single Page Applications (SPAs)</li>
+<li>Third-party service connections</li>
+</ul>
+
+<p>The REST API transforms WordPress from a traditional CMS into a powerful application platform. Start experimenting with it today!</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[Explore the WordPress REST API and learn how to build modern, decoupled applications with WordPress as your backend.]]></excerpt:encoded>
+		<wp:post_id>4</wp:post_id>
+		<wp:post_date><![CDATA[2025-11-07 11:15:00]]></wp:post_date>
+		<wp:post_date_gmt><![CDATA[2025-11-07 11:15:00]]></wp:post_date_gmt>
+		<wp:post_modified><![CDATA[2025-11-07 11:15:00]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-07 11:15:00]]></wp:post_modified_gmt>
+		<wp:comment_status><![CDATA[open]]></wp:comment_status>
+		<wp:ping_status><![CDATA[open]]></wp:ping_status>
+		<wp:post_name><![CDATA[wordpress-rest-api-building-modern-applications]]></wp:post_name>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_parent>0</wp:post_parent>
+		<wp:menu_order>0</wp:menu_order>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<wp:post_password><![CDATA[]]></wp:post_password>
+		<wp:is_sticky>0</wp:is_sticky>
+		<category domain="category" nicename="advanced"><![CDATA[Advanced]]></category>
+		<category domain="post_tag" nicename="rest-api"><![CDATA[REST API]]></category>
+		<category domain="post_tag" nicename="javascript"><![CDATA[javascript]]></category>
+	</item>
+
+	<item>
+		<title>Optimizing WordPress Performance: Tips and Techniques</title>
+		<link>http://localhost/optimizing-wordpress-performance-tips-techniques/</link>
+		<pubDate>Tue, 09 Nov 2025 15:45:00 +0000</pubDate>
+		<dc:creator><![CDATA[admin]]></dc:creator>
+		<guid isPermaLink="false">http://localhost/?p=5</guid>
+		<description></description>
+		<content:encoded><![CDATA[<h2>Boost Your WordPress Site Performance</h2>
+
+<p>Performance optimization is crucial for user experience, SEO, and conversions. A fast-loading WordPress site keeps visitors engaged and improves search rankings.</p>
+
+<h3>Database Optimization</h3>
+
+<p>Keep your database clean and efficient:</p>
+
+<ul>
+<li>Remove post revisions regularly</li>
+<li>Delete spam comments and transients</li>
+<li>Optimize database tables using phpMyAdmin or plugins</li>
+<li>Use indexed queries in custom code</li>
+</ul>
+
+<h3>Caching Strategies</h3>
+
+<p>Implement multiple caching layers:</p>
+
+<pre><code>
+// Object caching example
+$cached_data = wp_cache_get('my_data_key');
+if (false === $cached_data) {
+    $cached_data = expensive_database_query();
+    wp_cache_set('my_data_key', $cached_data, '', 3600);
+}
+</code></pre>
+
+<h3>Image Optimization</h3>
+
+<p>Images often account for most page weight:</p>
+
+<ul>
+<li>Use WebP format for better compression</li>
+<li>Implement lazy loading</li>
+<li>Serve responsive images with srcset</li>
+<li>Use a CDN for image delivery</li>
+</ul>
+
+<h3>Code Optimization</h3>
+
+<p>Write efficient PHP code:</p>
+
+<ul>
+<li>Minimize database queries</li>
+<li>Use transients for expensive operations</li>
+<li>Avoid using too many plugins</li>
+<li>Minify and combine CSS/JS files</li>
+</ul>
+
+<h3>Enqueuing Scripts Properly</h3>
+
+<pre><code>
+function optimize_script_loading() {
+    // Defer non-critical scripts
+    wp_enqueue_script('my-script', get_template_directory_uri() . '/js/script.js', array(), '1.0', true);
+}
+add_action('wp_enqueue_scripts', 'optimize_script_loading');
+</code></pre>
+
+<h3>Server-Level Optimizations</h3>
+
+<ul>
+<li>Use PHP 8.0+ for better performance</li>
+<li>Enable OPcache</li>
+<li>Configure server caching (Redis, Memcached)</li>
+<li>Use a quality hosting provider</li>
+</ul>
+
+<h3>Monitoring Performance</h3>
+
+<p>Regularly check your site's performance using:</p>
+
+<ul>
+<li>Google PageSpeed Insights</li>
+<li>GTmetrix</li>
+<li>Query Monitor plugin</li>
+<li>New Relic or similar APM tools</li>
+</ul>
+
+<h3>Quick Wins</h3>
+
+<p>Implement these for immediate improvements:</p>
+
+<ul>
+<li>Enable Gzip compression</li>
+<li>Leverage browser caching</li>
+<li>Use a CDN</li>
+<li>Remove unused plugins and themes</li>
+<li>Disable pingbacks and trackbacks</li>
+</ul>
+
+<p>Performance optimization is an ongoing process. Monitor your metrics, test changes, and continuously improve your site's speed!</p>]]></content:encoded>
+		<excerpt:encoded><![CDATA[Discover essential techniques for optimizing WordPress performance, from database tuning to caching strategies and code optimization.]]></excerpt:encoded>
+		<wp:post_id>5</wp:post_id>
+		<wp:post_date><![CDATA[2025-11-09 15:45:00]]></wp:post_date>
+		<wp:post_date_gmt><![CDATA[2025-11-09 15:45:00]]></wp:post_date_gmt>
+		<wp:post_modified><![CDATA[2025-11-09 15:45:00]]></wp:post_modified>
+		<wp:post_modified_gmt><![CDATA[2025-11-09 15:45:00]]></wp:post_modified_gmt>
+		<wp:comment_status><![CDATA[open]]></wp:comment_status>
+		<wp:ping_status><![CDATA[open]]></wp:ping_status>
+		<wp:post_name><![CDATA[optimizing-wordpress-performance-tips-techniques]]></wp:post_name>
+		<wp:status><![CDATA[publish]]></wp:status>
+		<wp:post_parent>0</wp:post_parent>
+		<wp:menu_order>0</wp:menu_order>
+		<wp:post_type><![CDATA[post]]></wp:post_type>
+		<wp:post_password><![CDATA[]]></wp:post_password>
+		<wp:is_sticky>0</wp:is_sticky>
+		<category domain="category" nicename="performance"><![CDATA[Performance]]></category>
+		<category domain="post_tag" nicename="optimization"><![CDATA[optimization]]></category>
+		<category domain="post_tag" nicename="speed"><![CDATA[speed]]></category>
+	</item>
+
+</channel>
+</rss>

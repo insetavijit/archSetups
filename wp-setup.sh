@@ -2,7 +2,7 @@
 # ============================================================
 # WordPress Auto Setup Script (for Arch + Nginx + WP-CLI)
 # Author: Avijit Sarkar
-# Version: 2.0 (Enhanced with better error handling & features)
+# Version: 3.0 (Enhanced with better structure & modern features)
 # ============================================================
 
 set -euo pipefail
@@ -24,8 +24,12 @@ ADMIN_EMAIL="${5:-admin@example.com}"
 THEME="${6:-astra}"
 PLUGINS=("elementor" "classic-editor")
 
+# Script metadata
+SCRIPT_VERSION="3.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ------------------------------------------------------------
-# Colors
+# Colors & Symbols
 # ------------------------------------------------------------
 C_RESET="\033[0m"
 C_GREEN="\033[32m"
@@ -35,121 +39,349 @@ C_BLUE="\033[34m"
 C_CYAN="\033[36m"
 C_GRAY="\033[90m"
 C_BOLD="\033[1m"
+C_MAGENTA="\033[35m"
+
+# Unicode symbols
+S_CHECK="✓"
+S_CROSS="✗"
+S_WARN="⚠"
+S_ARROW="►"
+S_SPIN="⟳"
 
 # ------------------------------------------------------------
-# Usage
+# Usage & Help
 # ------------------------------------------------------------
 show_usage() {
     cat << EOF
-${C_BOLD}WordPress Auto Setup Script${C_RESET}
+${C_BOLD}${C_CYAN}WordPress Auto Setup Script v${SCRIPT_VERSION}${C_RESET}
 
-${C_CYAN}Usage:${C_RESET}
+${C_CYAN}${C_BOLD}USAGE:${C_RESET}
   $0 <site_name> [db_user] [admin_user] [admin_pass] [admin_email] [theme]
   $0 --diagnose <site_name>
+  $0 --backup <site_name> [backup_name]
+  $0 --restore <site_name> <backup_name>
+  $0 --remove <site_name>
 
-${C_CYAN}Examples:${C_RESET}
+${C_CYAN}${C_BOLD}EXAMPLES:${C_RESET}
+  ${C_GRAY}# Quick setup with defaults${C_RESET}
   $0 mysite
+
+  ${C_GRAY}# Full custom setup${C_RESET}
   $0 mysite root myadmin mypass123 me@example.com generatepress
+
+  ${C_GRAY}# Diagnose existing site${C_RESET}
   $0 --diagnose mysite
 
-${C_CYAN}Arguments:${C_RESET}
-  site_name    - Required. Name of the WordPress site
-  db_user      - Optional. MySQL user (default: root)
-  admin_user   - Optional. WP admin username (default: admin)
-  admin_pass   - Optional. WP admin password (default: 123)
-  admin_email  - Optional. WP admin email (default: admin@example.com)
-  theme        - Optional. Theme to install (default: astra)
+  ${C_GRAY}# Backup a site${C_RESET}
+  $0 --backup mysite backup-20241112
 
-${C_CYAN}Options:${C_RESET}
-  --diagnose   - Run diagnostics on an existing installation
-  -h, --help   - Show this help message
+  ${C_GRAY}# Remove a site completely${C_RESET}
+  $0 --remove mysite
 
-${C_CYAN}Features:${C_RESET}
-  • Automatic dependency installation
-  • MySQL setup with secure password handling
-  • Nginx configuration generation
-  • Detailed logging
-  • Rollback on failure
+${C_CYAN}${C_BOLD}ARGUMENTS:${C_RESET}
+  ${C_GREEN}site_name${C_RESET}    Required. Name of the WordPress site (alphanumeric, hyphens)
+  ${C_GREEN}db_user${C_RESET}      Optional. MySQL user (default: root)
+  ${C_GREEN}admin_user${C_RESET}   Optional. WP admin username (default: admin)
+  ${C_GREEN}admin_pass${C_RESET}   Optional. WP admin password (default: 123)
+  ${C_GREEN}admin_email${C_RESET}  Optional. WP admin email (default: admin@example.com)
+  ${C_GREEN}theme${C_RESET}        Optional. Theme slug to install (default: astra)
 
-${C_GRAY}Log directory: $WWW_DIR/_logs${C_RESET}
+${C_CYAN}${C_BOLD}OPTIONS:${C_RESET}
+  ${C_GREEN}--diagnose${C_RESET}   Run comprehensive diagnostics on existing site
+  ${C_GREEN}--backup${C_RESET}     Create complete backup (files + database)
+  ${C_GREEN}--restore${C_RESET}    Restore site from backup
+  ${C_GREEN}--remove${C_RESET}     Remove site completely (with confirmation)
+  ${C_GREEN}-h, --help${C_RESET}   Show this help message
+  ${C_GREEN}--version${C_RESET}    Show script version
+
+${C_CYAN}${C_BOLD}FEATURES:${C_RESET}
+  ${S_ARROW} Automatic dependency checking & installation
+  ${S_ARROW} Secure MySQL setup with validation
+  ${S_ARROW} Smart Nginx configuration with PHP-FPM
+  ${S_ARROW} Complete backup & restore functionality
+  ${S_ARROW} Comprehensive error handling & rollback
+  ${S_ARROW} Detailed logging with timestamps
+  ${S_ARROW} Site health diagnostics
+  ${S_ARROW} Clean site removal
+
+${C_GRAY}Log directory: $WWW_DIR/_logs
+Backup directory: $WWW_DIR/_backups${C_RESET}
 EOF
     exit 0
 }
 
+# ------------------------------------------------------------
+# Diagnostics
+# ------------------------------------------------------------
 diagnose_site() {
     local site="$1"
     local site_dir="$WWW_DIR/$site"
 
-    echo -e "${C_CYAN}${C_BOLD}Diagnosing site: $site${C_RESET}\n"
+    echo -e "${C_CYAN}${C_BOLD}╔═══════════════════════════════════════════╗"
+    echo -e "║     Diagnosing Site: ${site}${C_RESET}"
+    echo -e "${C_CYAN}${C_BOLD}╚═══════════════════════════════════════════╝${C_RESET}\n"
 
-    # Check directory
-    echo -e "${C_BLUE}Directory Check:${C_RESET}"
+    # Directory Check
+    echo -e "${C_BLUE}${C_BOLD}[1] Directory Structure${C_RESET}"
     if [[ -d "$site_dir" ]]; then
-        echo -e "  ${C_GREEN}✓${C_RESET} Site directory exists: $site_dir"
-        ls -lah "$site_dir" | head -10
+        echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Site directory exists: ${C_GRAY}$site_dir${C_RESET}"
+        local dir_size=$(du -sh "$site_dir" 2>/dev/null | cut -f1)
+        echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Size: $dir_size"
+        echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Permissions: $(ls -ld "$site_dir" | awk '{print $1, $3":"$4}')"
+
+        # Check key WordPress files
+        local key_files=("wp-config.php" "wp-load.php" "wp-settings.php" "index.php")
+        for file in "${key_files[@]}"; do
+            if [[ -f "$site_dir/$file" ]]; then
+                echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} $file"
+            else
+                echo -e "  ${C_RED}${S_CROSS}${C_RESET} $file ${C_GRAY}(missing)${C_RESET}"
+            fi
+        done
     else
-        echo -e "  ${C_RED}✗${C_RESET} Site directory not found: $site_dir"
+        echo -e "  ${C_RED}${S_CROSS}${C_RESET} Site directory not found"
         return 1
     fi
 
-    # Check wp-config.php
-    echo -e "\n${C_BLUE}Configuration Check:${C_RESET}"
+    # Configuration Check
+    echo -e "\n${C_BLUE}${C_BOLD}[2] WordPress Configuration${C_RESET}"
     if [[ -f "$site_dir/wp-config.php" ]]; then
-        echo -e "  ${C_GREEN}✓${C_RESET} wp-config.php exists"
-        echo -e "\n  Database settings:"
-        grep -E "DB_NAME|DB_USER|DB_HOST|table_prefix" "$site_dir/wp-config.php"
+        echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} wp-config.php exists"
+        echo -e "\n  ${C_GRAY}Database Settings:${C_RESET}"
+        grep -E "DB_NAME|DB_USER|DB_HOST|table_prefix" "$site_dir/wp-config.php" | \
+            sed 's/^/    /' | sed "s/define/  ${C_CYAN}define${C_RESET}/"
     else
-        echo -e "  ${C_RED}✗${C_RESET} wp-config.php not found"
+        echo -e "  ${C_RED}${S_CROSS}${C_RESET} wp-config.php not found"
     fi
 
-    # Check database
-    echo -e "\n${C_BLUE}Database Check:${C_RESET}"
-    cd "$site_dir"
-    if wp db check 2>&1; then
-        echo -e "  ${C_GREEN}✓${C_RESET} Database connection successful"
+    # Database Check
+    echo -e "\n${C_BLUE}${C_BOLD}[3] Database Connection${C_RESET}"
+    cd "$site_dir" 2>/dev/null || return 1
 
-        # Check if installed
+    if wp db check --quiet 2>&1; then
+        echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Database connection successful"
+
         if wp core is-installed 2>/dev/null; then
-            echo -e "  ${C_GREEN}✓${C_RESET} WordPress is installed"
-            wp core version
+            echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} WordPress is installed"
+            local wp_version=$(wp core version 2>/dev/null)
+            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Version: $wp_version"
+
+            # Get site info
+            local site_url=$(wp option get siteurl 2>/dev/null)
+            local site_title=$(wp option get blogname 2>/dev/null)
+            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} URL: $site_url"
+            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Title: $site_title"
+
+            # Count posts
+            local post_count=$(wp post list --post_type=post --format=count 2>/dev/null || echo "0")
+            local page_count=$(wp post list --post_type=page --format=count 2>/dev/null || echo "0")
+            echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Posts: $post_count | Pages: $page_count"
         else
-            echo -e "  ${C_YELLOW}⚠${C_RESET}  WordPress not installed in database"
+            echo -e "  ${C_YELLOW}${S_WARN}${C_RESET} WordPress not installed in database"
         fi
     else
-        echo -e "  ${C_RED}✗${C_RESET} Database connection failed"
+        echo -e "  ${C_RED}${S_CROSS}${C_RESET} Database connection failed"
     fi
 
-    # Check Nginx
-    echo -e "\n${C_BLUE}Nginx Check:${C_RESET}"
+    # Theme & Plugins
+    echo -e "\n${C_BLUE}${C_BOLD}[4] Theme & Plugins${C_RESET}"
+    local active_theme=$(wp theme list --status=active --field=name 2>/dev/null || echo "Unknown")
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Active Theme: $active_theme"
+
+    local plugin_count=$(wp plugin list --status=active --format=count 2>/dev/null || echo "0")
+    echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Active Plugins: $plugin_count"
+
+    if [[ $plugin_count -gt 0 ]]; then
+        wp plugin list --status=active --fields=name,version --format=table 2>/dev/null | \
+            tail -n +2 | sed 's/^/    /'
+    fi
+
+    # Nginx Check
+    echo -e "\n${C_BLUE}${C_BOLD}[5] Nginx Configuration${C_RESET}"
     if [[ -f "/etc/nginx/sites-available/$site.conf" ]]; then
-        echo -e "  ${C_GREEN}✓${C_RESET} Nginx config exists"
+        echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Nginx config exists"
         if [[ -L "/etc/nginx/sites-enabled/$site.conf" ]]; then
-            echo -e "  ${C_GREEN}✓${C_RESET} Nginx config enabled"
+            echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Config is enabled"
+
+            # Test nginx config
+            if sudo nginx -t &>/dev/null; then
+                echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Nginx config valid"
+            else
+                echo -e "  ${C_RED}${S_CROSS}${C_RESET} Nginx config has errors"
+            fi
         else
-            echo -e "  ${C_YELLOW}⚠${C_RESET}  Nginx config not enabled"
+            echo -e "  ${C_YELLOW}${S_WARN}${C_RESET} Config not enabled"
         fi
     else
-        echo -e "  ${C_RED}✗${C_RESET} Nginx config not found"
+        echo -e "  ${C_RED}${S_CROSS}${C_RESET} Nginx config not found"
     fi
 
-    # Check permissions
-    echo -e "\n${C_BLUE}Permission Check:${C_RESET}"
-    ls -ld "$site_dir"
+    # Health Check
+    echo -e "\n${C_BLUE}${C_BOLD}[6] Site Health${C_RESET}"
+    if command -v curl &>/dev/null; then
+        local http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost/$site" 2>/dev/null || echo "000")
+        if [[ "$http_code" == "200" ]]; then
+            echo -e "  ${C_GREEN}${S_CHECK}${C_RESET} Site is accessible (HTTP $http_code)"
+        else
+            echo -e "  ${C_RED}${S_CROSS}${C_RESET} Site returned HTTP $http_code"
+        fi
+    fi
 
-    echo -e "\n${C_CYAN}Latest log file:${C_RESET}"
+    # Latest log
+    echo -e "\n${C_BLUE}${C_BOLD}[7] Recent Logs${C_RESET}"
     local latest_log=$(ls -t "$WWW_DIR/_logs/$site"*.log 2>/dev/null | head -1)
     if [[ -n "$latest_log" ]]; then
-        echo "$latest_log"
-        echo -e "\nLast 20 lines:"
-        tail -20 "$latest_log"
+        echo -e "  ${C_GREEN}${S_ARROW}${C_RESET} Latest: ${C_GRAY}$(basename "$latest_log")${C_RESET}"
+        echo -e "\n  ${C_GRAY}Last 10 lines:${C_RESET}"
+        tail -10 "$latest_log" | sed 's/^/    /'
     else
-        echo "No log files found"
+        echo -e "  ${C_GRAY}No log files found${C_RESET}"
     fi
+
+    echo -e "\n${C_GREEN}${C_BOLD}Diagnosis complete!${C_RESET}\n"
 }
 
+# ------------------------------------------------------------
+# Backup & Restore
+# ------------------------------------------------------------
+backup_site() {
+    local site="$1"
+    local backup_name="${2:-backup-$(date +%Y%m%d-%H%M%S)}"
+    local site_dir="$WWW_DIR/$site"
+    local backup_dir="$WWW_DIR/_backups/$site"
+    local backup_path="$backup_dir/$backup_name"
+
+    echo -e "${C_CYAN}${C_BOLD}Creating backup for: $site${C_RESET}\n"
+
+    if [[ ! -d "$site_dir" ]]; then
+        error "Site directory not found: $site_dir"
+        return 1
+    fi
+
+    mkdir -p "$backup_path"
+
+    # Backup files
+    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Backing up files..."
+    tar -czf "$backup_path/files.tar.gz" -C "$WWW_DIR" "$site" 2>/dev/null
+    success "Files backed up"
+
+    # Backup database
+    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Backing up database..."
+    cd "$site_dir"
+    wp db export "$backup_path/database.sql" --quiet 2>/dev/null
+    success "Database backed up"
+
+    # Save metadata
+    cat > "$backup_path/metadata.txt" << EOF
+Site: $site
+Backup Date: $(date '+%Y-%m-%d %H:%M:%S')
+WordPress Version: $(wp core version 2>/dev/null || echo "Unknown")
+Theme: $(wp theme list --status=active --field=name 2>/dev/null || echo "Unknown")
+Site URL: $(wp option get siteurl 2>/dev/null || echo "Unknown")
+EOF
+
+    local backup_size=$(du -sh "$backup_path" | cut -f1)
+    success "Backup created: $backup_path (Size: $backup_size)"
+}
+
+restore_site() {
+    local site="$1"
+    local backup_name="$2"
+    local backup_path="$WWW_DIR/_backups/$site/$backup_name"
+
+    echo -e "${C_CYAN}${C_BOLD}Restoring site: $site${C_RESET}\n"
+
+    if [[ ! -d "$backup_path" ]]; then
+        error "Backup not found: $backup_path"
+        return 1
+    fi
+
+    if ! confirm "This will overwrite current site. Continue?" "n"; then
+        warn "Restore cancelled"
+        return 0
+    fi
+
+    # Restore files
+    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Restoring files..."
+    tar -xzf "$backup_path/files.tar.gz" -C "$WWW_DIR" 2>/dev/null
+    success "Files restored"
+
+    # Restore database
+    echo -e "${C_BLUE}${S_SPIN}${C_RESET} Restoring database..."
+    cd "$WWW_DIR/$site"
+    wp db import "$backup_path/database.sql" --quiet 2>/dev/null
+    success "Database restored"
+
+    success "Site restored successfully!"
+}
+
+# ------------------------------------------------------------
+# Site Removal
+# ------------------------------------------------------------
+remove_site() {
+    local site="$1"
+    local site_dir="$WWW_DIR/$site"
+    local db_name="${site//-/_}"
+
+    echo -e "${C_RED}${C_BOLD}⚠  WARNING: Site Removal${C_RESET}\n"
+    echo -e "This will permanently delete:"
+    echo -e "  ${S_ARROW} Directory: $site_dir"
+    echo -e "  ${S_ARROW} Database: $db_name"
+    echo -e "  ${S_ARROW} Nginx config: /etc/nginx/sites-available/$site.conf\n"
+
+    if ! confirm "Are you absolutely sure?" "n"; then
+        warn "Removal cancelled"
+        return 0
+    fi
+
+    # Create backup first
+    if confirm "Create backup before removal?" "y"; then
+        backup_site "$site" "pre-removal-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    # Remove directory
+    if [[ -d "$site_dir" ]]; then
+        rm -rf "$site_dir"
+        success "Removed site directory"
+    fi
+
+    # Drop database
+    if mysql -u root -e "USE $db_name;" &>/dev/null 2>&1; then
+        mysql -u root -e "DROP DATABASE IF EXISTS $db_name;" &>/dev/null
+        success "Dropped database"
+    fi
+
+    # Remove Nginx config
+    if [[ -f "/etc/nginx/sites-available/$site.conf" ]]; then
+        sudo rm -f "/etc/nginx/sites-available/$site.conf"
+        sudo rm -f "/etc/nginx/sites-enabled/$site.conf"
+        sudo nginx -t &>/dev/null && sudo systemctl reload nginx
+        success "Removed Nginx config"
+    fi
+
+    success "Site removed completely"
+}
+
+# ------------------------------------------------------------
+# Argument Parsing
+# ------------------------------------------------------------
 [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && show_usage
+[[ "${1:-}" == "--version" ]] && { echo "WordPress Auto Setup Script v${SCRIPT_VERSION}"; exit 0; }
 [[ "${1:-}" == "--diagnose" ]] && { diagnose_site "${2:-wordpress}"; exit 0; }
-[[ -z "$SITE_NAME" ]] && { echo -e "${C_RED}Error: Site name is required${C_RESET}\n"; show_usage; }
+[[ "${1:-}" == "--backup" ]] && { backup_site "${2:-}" "${3:-}"; exit 0; }
+[[ "${1:-}" == "--restore" ]] && { restore_site "${2:-}" "${3:-}"; exit 0; }
+[[ "${1:-}" == "--remove" ]] && { remove_site "${2:-}"; exit 0; }
+
+# Validate site name
+if [[ -z "$SITE_NAME" ]]; then
+    echo -e "${C_RED}Error: Site name is required${C_RESET}\n"
+    show_usage
+fi
+
+if [[ ! "$SITE_NAME" =~ ^[a-zA-Z0-9-]+$ ]]; then
+    error "Invalid site name. Use only alphanumeric characters and hyphens."
+    exit 1
+fi
 
 # ------------------------------------------------------------
 # Logging Setup
@@ -160,7 +392,7 @@ sudo chown -R "$USER:$USER" "$LOG_DIR" 2>/dev/null || true
 LOG_FILE="$LOG_DIR/${SITE_NAME}-$(date +%Y%m%d-%H%M%S).log"
 
 # ------------------------------------------------------------
-# Helper functions
+# Helper Functions
 # ------------------------------------------------------------
 log() {
     echo -e "${C_GRAY}[$(date +%H:%M:%S)]${C_RESET} $1"
@@ -168,24 +400,24 @@ log() {
 }
 
 success() {
-    echo -e "${C_GREEN}✓${C_RESET} $1"
+    echo -e "${C_GREEN}${S_CHECK}${C_RESET} $1"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [OK] $1" >> "$LOG_FILE"
 }
 
 error() {
-    echo -e "${C_RED}✗${C_RESET} $1" >&2
+    echo -e "${C_RED}${S_CROSS}${C_RESET} $1" >&2
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $1" >> "$LOG_FILE"
 }
 
 warn() {
-    echo -e "${C_YELLOW}⚠${C_RESET}  $1"
+    echo -e "${C_YELLOW}${S_WARN}${C_RESET}  $1"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] $1" >> "$LOG_FILE"
 }
 
 run() {
     local cmd="$1"
     local msg="$2"
-    log "⟳ $msg"
+    log "${S_SPIN} $msg"
     if eval "$cmd" >>"$LOG_FILE" 2>&1; then
         success "$msg"
         return 0
@@ -201,10 +433,10 @@ confirm() {
     local response
 
     if [[ "$default" == "y" ]]; then
-        read -rp "$prompt [Y/n]: " response
+        read -rp "$(echo -e "${C_YELLOW}${prompt}${C_RESET} [Y/n]: ")" response
         response="${response:-y}"
     else
-        read -rp "$prompt [y/N]: " response
+        read -rp "$(echo -e "${C_YELLOW}${prompt}${C_RESET} [y/N]: ")" response
         response="${response:-n}"
     fi
 
@@ -219,9 +451,9 @@ cleanup_on_error() {
         rm -rf "$SITE_DIR"
     fi
 
-    if mysql -u "$DB_USER" -p"$DB_PASS" -e "USE $DB_NAME;" &>/dev/null 2>&1; then
+    if mysql -u "$DB_USER" -p"${DB_PASS:-}" -e "USE $DB_NAME;" &>/dev/null 2>&1; then
         warn "Dropping database: $DB_NAME"
-        mysql -u "$DB_USER" -p"$DB_PASS" -e "DROP DATABASE IF EXISTS $DB_NAME;" &>/dev/null
+        mysql -u "$DB_USER" -p"${DB_PASS:-}" -e "DROP DATABASE IF EXISTS $DB_NAME;" &>/dev/null
     fi
 
     if [[ -f "/etc/nginx/sites-available/$SITE_NAME.conf" ]]; then
@@ -237,10 +469,10 @@ cleanup_on_error() {
 trap cleanup_on_error ERR
 
 # ------------------------------------------------------------
-# Environment Setup
+# System Setup Functions
 # ------------------------------------------------------------
 prepare_www_dir() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Preparing project root...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Preparing Project Environment${C_RESET}"
 
     if [[ ! -d "$WWW_DIR" ]]; then
         mkdir -p "$WWW_DIR"
@@ -251,11 +483,15 @@ prepare_www_dir() {
         success "WWW directory exists: $WWW_DIR"
     fi
 
+    # Create backup directory
+    mkdir -p "$WWW_DIR/_backups"
+    success "Backup directory ready"
+
     if [[ -d "$SITE_DIR" ]]; then
         if confirm "Site directory already exists. Remove and recreate?" "n"; then
             rm -rf "$SITE_DIR"
             mkdir -p "$SITE_DIR"
-            success "Recreated site directory: $SITE_DIR"
+            success "Recreated site directory"
         else
             error "Cannot proceed with existing directory"
             exit 1
@@ -266,13 +502,10 @@ prepare_www_dir() {
     fi
 }
 
-# ------------------------------------------------------------
-# System Checks
-# ------------------------------------------------------------
 check_requirements() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking system requirements...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking System Requirements${C_RESET}"
 
-    local packages=("php" "php-fpm" "mariadb" "nginx" "curl" "wget")
+    local packages=("php" "php-fpm" "mariadb" "nginx" "curl" "wget" "tar" "gzip")
     local missing=()
 
     for pkg in "${packages[@]}"; do
@@ -294,20 +527,19 @@ check_requirements() {
         success "All required packages installed"
     fi
 
-    # Check PHP MySQL extensions
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking PHP extensions...${C_RESET}"
-    local required_extensions=("mysqli" "pdo_mysql")
+    # Check PHP extensions
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Verifying PHP Extensions${C_RESET}"
+    local required_extensions=("mysqli" "pdo_mysql" "curl" "zip" "gd" "mbstring" "xml")
     local missing_extensions=()
 
     for ext in "${required_extensions[@]}"; do
-        if ! php -m 2>/dev/null | grep -q "^${ext}$"; then
+        if ! php -m 2>/dev/null | grep -qi "^${ext}$"; then
             missing_extensions+=("$ext")
         fi
     done
 
     if (( ${#missing_extensions[@]} > 0 )); then
         warn "Missing PHP extensions: ${missing_extensions[*]}"
-        warn "Attempting to enable extensions in php.ini..."
 
         local php_ini="/etc/php/php.ini"
         local needs_restart=0
@@ -317,11 +549,7 @@ check_requirements() {
                 sudo sed -i "s/^;extension=${ext}/extension=${ext}/" "$php_ini"
                 success "Enabled ${ext} in php.ini"
                 needs_restart=1
-            elif grep -q "^extension=${ext}" "$php_ini" 2>/dev/null; then
-                warn "${ext} already enabled in php.ini but not loaded"
-                needs_restart=1
-            else
-                warn "${ext} not found in php.ini, adding it..."
+            elif ! grep -q "^extension=${ext}" "$php_ini" 2>/dev/null; then
                 echo "extension=${ext}" | sudo tee -a "$php_ini" >/dev/null
                 success "Added ${ext} to php.ini"
                 needs_restart=1
@@ -329,49 +557,38 @@ check_requirements() {
         done
 
         if (( needs_restart )); then
-            warn "Restarting PHP-FPM to load extensions..."
             sudo systemctl restart php-fpm
             sleep 2
-
-            # Verify extensions are now loaded
-            local still_missing=()
-            for ext in "${missing_extensions[@]}"; do
-                if ! php -m 2>/dev/null | grep -q "^${ext}$"; then
-                    still_missing+=("$ext")
-                fi
-            done
-
-            if (( ${#still_missing[@]} > 0 )); then
-                error "Failed to load extensions: ${still_missing[*]}"
-                warn "Please manually enable these extensions in $php_ini"
-                exit 1
-            else
-                success "All PHP extensions loaded successfully"
-            fi
+            success "PHP-FPM restarted"
         fi
     else
-        success "All required PHP extensions available"
+        success "All PHP extensions available"
     fi
 }
 
 check_wp_cli() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking WP-CLI...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking WP-CLI${C_RESET}"
 
     if ! command -v wp &>/dev/null; then
         warn "WP-CLI not found. Installing..."
-        curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+        curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
         chmod +x wp-cli.phar
         sudo mv wp-cli.phar /usr/local/bin/wp
         success "WP-CLI installed"
     else
-        local version
-        version=$(wp --version | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
+        local version=$(wp --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
         success "WP-CLI ready (version: $version)"
+    fi
+
+    # Verify WP-CLI works
+    if ! wp --info &>/dev/null; then
+        error "WP-CLI is not working correctly"
+        exit 1
     fi
 }
 
 check_services() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Verifying services...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Verifying Services${C_RESET}"
 
     local services=("nginx" "php-fpm" "mariadb")
 
@@ -386,25 +603,26 @@ check_services() {
             success "$service running"
         else
             error "$service failed to start"
+            sudo systemctl status "$service" --no-pager
             exit 1
         fi
     done
 }
 
 # ------------------------------------------------------------
-# MySQL Setup
+# MySQL Setup Functions
 # ------------------------------------------------------------
 setup_mysql_password() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Checking MySQL authentication...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ MySQL Authentication Setup${C_RESET}"
 
     if sudo mysql -e "SELECT 1;" &>/dev/null; then
-        warn "Detected socket authentication for root."
+        warn "Detected socket authentication for root"
 
         if confirm "Set MySQL root password?" "y"; then
             while true; do
-                read -rsp "Enter new MySQL root password: " DB_PASS
+                read -rsp "$(echo -e "${C_CYAN}Enter new MySQL root password:${C_RESET} ")" DB_PASS
                 echo
-                read -rsp "Confirm password: " DB_PASS_CONFIRM
+                read -rsp "$(echo -e "${C_CYAN}Confirm password:${C_RESET} ")" DB_PASS_CONFIRM
                 echo
 
                 if [[ "$DB_PASS" == "$DB_PASS_CONFIRM" ]]; then
@@ -430,11 +648,11 @@ EOF
 }
 
 prompt_mysql_password() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ MySQL Authentication...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ MySQL Authentication${C_RESET}"
 
     local tries=0
     while (( tries < 3 )); do
-        read -rsp "Enter MySQL password for user '$DB_USER': " DB_PASS
+        read -rsp "$(echo -e "${C_CYAN}Enter MySQL password for user '$DB_USER':${C_RESET} ")" DB_PASS
         echo
 
         if mysql -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1;" &>/dev/null 2>&1; then
@@ -452,259 +670,10 @@ prompt_mysql_password() {
 }
 
 ensure_database() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Database Setup...${C_RESET}"
+    echo -e "\n${C_BLUE}${C_BOLD}▶ Database Setup${C_RESET}"
 
     if mysql -u "$DB_USER" -p"$DB_PASS" -e "USE $DB_NAME;" &>/dev/null 2>&1; then
         warn "Database '$DB_NAME' already exists"
 
         if confirm "Drop and recreate database?" "n"; then
-            run "mysql -u $DB_USER -p$DB_PASS -e 'DROP DATABASE $DB_NAME;'" \
-                "Drop existing database"
-            run "mysql -u $DB_USER -p$DB_PASS -e 'CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'" \
-                "Create database $DB_NAME"
-        else
-            warn "Using existing database (may cause conflicts)"
-        fi
-    else
-        run "mysql -u $DB_USER -p$DB_PASS -e 'CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'" \
-            "Create database $DB_NAME"
-    fi
-}
-
-# ------------------------------------------------------------
-# Nginx Configuration
-# ------------------------------------------------------------
-setup_nginx() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Configuring Nginx...${C_RESET}"
-
-    local nginx_conf="/etc/nginx/sites-available/$SITE_NAME.conf"
-    local nginx_enabled="/etc/nginx/sites-enabled/$SITE_NAME.conf"
-
-    # Create sites-available and sites-enabled directories if they don't exist
-    sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-
-    # Check if sites-enabled is included in main nginx.conf
-    if ! grep -q "sites-enabled" /etc/nginx/nginx.conf; then
-        warn "Adding sites-enabled to nginx.conf"
-        sudo sed -i '/http {/a \    include /etc/nginx/sites-enabled/*;' /etc/nginx/nginx.conf
-    fi
-
-    sudo tee "$nginx_conf" > /dev/null <<EOF
-server {
-    listen 80;
-    server_name localhost;
-    root $SITE_DIR;
-    index index.php index.html;
-
-    location /$SITE_NAME {
-        alias $SITE_DIR;
-        try_files \$uri \$uri/ /$SITE_NAME/index.php?\$args;
-
-        location ~ \.php$ {
-            include fastcgi_params;
-            fastcgi_pass unix:/run/php-fpm/php-fpm.sock;
-            fastcgi_param SCRIPT_FILENAME \$request_filename;
-            fastcgi_index index.php;
-        }
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-}
-EOF
-
-    sudo ln -sf "$nginx_conf" "$nginx_enabled"
-
-    if sudo nginx -t &>/dev/null; then
-        sudo systemctl reload nginx
-        success "Nginx configured and reloaded"
-    else
-        error "Nginx configuration test failed"
-        return 1
-    fi
-}
-
-# ------------------------------------------------------------
-# WordPress Installation
-# ------------------------------------------------------------
-install_wordpress() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Installing WordPress...${C_RESET}"
-
-    cd "$SITE_DIR"
-
-    run "wp core download --path=$SITE_DIR --quiet" \
-        "Download WordPress core" || return 1
-
-    run "wp config create --dbname=$DB_NAME --dbuser=$DB_USER --dbpass=$DB_PASS --skip-check --force --quiet" \
-        "Create wp-config.php" || return 1
-
-    # Test database connection before installation
-    log "Testing database connection..."
-    if ! wp db check --quiet 2>/dev/null; then
-        error "Database connection failed"
-        log "Trying to diagnose the issue..."
-
-        # Show detailed error
-        wp db check 2>&1 | tee -a "$LOG_FILE"
-
-        # Try manual connection test
-        if ! mysql -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT 1;" &>/dev/null; then
-            error "Cannot connect to database $DB_NAME with user $DB_USER"
-            return 1
-        fi
-
-        warn "Database exists but WP-CLI cannot connect. Checking wp-config.php..."
-        grep -E "DB_NAME|DB_USER|DB_PASSWORD|DB_HOST" "$SITE_DIR/wp-config.php" | tee -a "$LOG_FILE"
-        return 1
-    fi
-    success "Database connection verified"
-
-    # Check if WordPress is already installed
-    if wp core is-installed 2>/dev/null; then
-        warn "WordPress is already installed in the database"
-        if confirm "Reinstall WordPress (will erase existing data)?" "n"; then
-            run "wp db reset --yes --quiet" "Reset database"
-        else
-            error "Cannot proceed with existing installation"
-            return 1
-        fi
-    fi
-
-    # Install with verbose error output on failure
-    log "Installing WordPress (this may take a moment)..."
-    if ! wp core install \
-        --url="$SITE_URL" \
-        --title="$SITE_TITLE" \
-        --admin_user="$ADMIN_USER" \
-        --admin_password="$ADMIN_PASS" \
-        --admin_email="$ADMIN_EMAIL" \
-        --skip-email 2>&1 | tee -a "$LOG_FILE"; then
-
-        error "WordPress installation failed"
-        log "Debugging information:"
-        echo "Site URL: $SITE_URL" | tee -a "$LOG_FILE"
-        echo "Site Dir: $SITE_DIR" | tee -a "$LOG_FILE"
-        echo "DB Name: $DB_NAME" | tee -a "$LOG_FILE"
-        echo "Checking wp-config.php..." | tee -a "$LOG_FILE"
-
-        if [[ -f "$SITE_DIR/wp-config.php" ]]; then
-            grep -E "table_prefix|DB_" "$SITE_DIR/wp-config.php" | tee -a "$LOG_FILE"
-        fi
-
-        return 1
-    fi
-    success "Install WordPress"
-
-    run "wp rewrite structure '/%postname%/' --hard --quiet" \
-        "Set permalink structure" || return 1
-}
-
-setup_theme() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Setting up theme...${C_RESET}"
-
-    if [[ "$THEME" != "default" && -n "$THEME" ]]; then
-        if run "wp theme install $THEME --activate --quiet" "Install and activate theme ($THEME)"; then
-            # Remove unused default themes
-            local inactive_themes
-            inactive_themes=$(wp theme list --status=inactive --field=name 2>/dev/null || echo "")
-            if [[ -n "$inactive_themes" ]]; then
-                run "wp theme delete $inactive_themes" "Remove unused themes" || warn "Could not remove some themes"
-            fi
-        else
-            warn "Theme installation failed. Using default theme."
-        fi
-    else
-        log "Using default theme"
-    fi
-}
-
-setup_plugins() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Setting up plugins...${C_RESET}"
-
-    if (( ${#PLUGINS[@]} > 0 )); then
-        for plugin in "${PLUGINS[@]}"; do
-            run "wp plugin install $plugin --activate --quiet" \
-                "Install plugin ($plugin)" || warn "Plugin $plugin installation failed"
-        done
-
-        # Remove default plugins
-        run "wp plugin delete hello akismet --quiet" \
-            "Remove default plugins" || warn "Could not remove default plugins"
-    else
-        log "No additional plugins to install"
-    fi
-}
-
-finalize_setup() {
-    echo -e "\n${C_BLUE}${C_BOLD}▶ Finalizing setup...${C_RESET}"
-
-    local plugin_list="${PLUGINS[*]:-none}"
-    run "wp option update blogdescription 'Built with WordPress, $THEME & $plugin_list' --quiet" \
-        "Update site tagline"
-
-    run "wp option update timezone_string 'Asia/Kolkata' --quiet" \
-        "Set timezone"
-
-    # Set proper permissions
-    sudo chown -R "$USER:http" "$SITE_DIR"
-    sudo chmod -R 775 "$SITE_DIR"
-    success "Set proper file permissions"
-}
-
-# ------------------------------------------------------------
-# Main Execution
-# ------------------------------------------------------------
-main() {
-    clear
-    echo -e "${C_BOLD}${C_CYAN}"
-    echo "╔══════════════════════════════════════════════════════╗"
-    echo "║         WordPress Auto Setup Script v2.0            ║"
-    echo "╚══════════════════════════════════════════════════════╝"
-    echo -e "${C_RESET}"
-    echo -e "${C_BLUE}Site:${C_RESET}  ${C_BOLD}$SITE_NAME${C_RESET}"
-    echo -e "${C_BLUE}Path:${C_RESET}  $SITE_DIR"
-    echo -e "${C_BLUE}URL:${C_RESET}   $SITE_URL\n"
-
-    log "=== Starting WordPress setup for $SITE_NAME ==="
-
-    check_requirements
-    check_wp_cli
-    check_services
-    prepare_www_dir
-
-    setup_mysql_password
-    prompt_mysql_password
-    ensure_database
-
-    install_wordpress
-    setup_nginx
-    setup_theme
-    setup_plugins
-    finalize_setup
-
-    # Success summary
-    echo -e "\n${C_GREEN}${C_BOLD}╔══════════════════════════════════════════════════════╗"
-    echo -e "║              Setup Completed Successfully!           ║"
-    echo -e "╚══════════════════════════════════════════════════════╝${C_RESET}\n"
-
-    echo -e "${C_CYAN}Site Details:${C_RESET}"
-    echo -e "  ${C_GREEN}►${C_RESET} URL:       $SITE_URL"
-    echo -e "  ${C_GREEN}►${C_RESET} Admin:     $SITE_URL/wp-admin"
-    echo -e "  ${C_GREEN}►${C_RESET} Username:  $ADMIN_USER"
-    echo -e "  ${C_GREEN}►${C_RESET} Password:  $ADMIN_PASS"
-    echo -e "  ${C_GREEN}►${C_RESET} Email:     $ADMIN_EMAIL"
-    echo -e "  ${C_GREEN}►${C_RESET} Theme:     ${THEME:-default}"
-    [[ ${#PLUGINS[@]} -gt 0 ]] && echo -e "  ${C_GREEN}►${C_RESET} Plugins:   ${PLUGINS[*]}"
-    echo -e "  ${C_GRAY}►${C_RESET} Log:       $LOG_FILE"
-
-    echo -e "\n${C_YELLOW}Next Steps:${C_RESET}"
-    echo -e "  1. Visit $SITE_URL to see your site"
-    echo -e "  2. Login at $SITE_URL/wp-admin"
-    echo -e "  3. Start building!\n"
-
-    log "Setup completed successfully"
-}
-
-# Run main function
-main
+            run "mysql -u $DB_USER -p$DB_PASS -e 'DROP DATABASE $DB_NAME;'" \dumy
